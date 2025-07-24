@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IG Medical SMS Dashboard</title>
+  <style>
+    body { font-family: sans-serif; max-width: 400px; margin: 2em auto; }
+    label, select, input, button { display: block; width: 100%; margin-bottom: 1em; }
+    button { padding: .5em; }
+  </style>
+</head>
+<body>
+  <h2>IG Medical SMS Launcher</h2>
+ 
+  <label for="phone">Phone Number:</label>
+  <input id="phone" type="tel" placeholder="+1XXXXXXXXXX" value="+1">
+
+  <label for="msg">Choose a Message:</label>
+  <select id="msg"></select>
+
+  <button id="send">Send SMS</button>
+  <pre id="status"></pre>
+
+  <script>
+    // <-- EDIT ONLY THIS ARRAY -->
+    const messages = [
+      `Hello! Reminder: Your preoperative clearance appointment is scheduled for tomorrow at 3:15 PM. Reply "Done" once you’ve checked in.`,
+      `Good morning! Could you please reply with the facility name where your labwork and chest x-ray were completed? Don’t forget to check in now.`,
+      `This is IG Medical: Please complete your check-in via YourHealthFile before tomorrow’s appointment.`
+      `Hi there! This is IG Medical reminding you that your pre‑operative clearance appointment is tomorrow at 9:45 AM. To save time, please complete your check‑in now via YourHealthFile: https://www.yourhealthfile.com/portal/login.jsp Reply 'Done' after you have successfully checked in. If you have not registered, please reply with your email so that we can send you the registration link.`
+    ];
+
+    // Populate the dropdown
+    const select = document.getElementById('msg');
+    messages.forEach(text => {
+      const opt = document.createElement('option');
+      opt.value = text;
+      opt.textContent = text;
+      select.appendChild(opt);
+    });
+
+    // Send logic stays the same
+    document.getElementById('send').addEventListener('click', () => {
+      const phone   = document.getElementById('phone').value.trim();
+      const message = select.value;
+      const status  = document.getElementById('status');
+      status.textContent = 'Sending…';
+
+      fetch('https://sms-proxy.joannab.workers.dev', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          phone,
+          message,
+          replyWebhookUrl: 'https://igmdlv.joannab.workers.dev/'
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        status.textContent = data.success 
+          ? '✅ Sent!' 
+          : '❌ Error: ' + (data.error || JSON.stringify(data));
+      })
+      .catch(err => {
+        status.textContent = '❌ Fetch failed: ' + err;
+      });
+    });
+  </script>
+</body>
+</html>
+
