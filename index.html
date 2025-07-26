@@ -1,30 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>	
-	<link rel="manifest" href="/sms-dashboard/manifest.json">
-	<meta name="apple-mobile-web-app-capable" content="yes">
-	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-	<link rel="apple-touch-icon" href="https://raw.githubusercontent.com/Joannabigmdlv/sms-dashboard/main/icon-192.png">
+<head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- PWA manifest & iOS support -->
+  <link rel="manifest" href="/sms-dashboard/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/Joannabigmdlv/sms-dashboard/main/icon-192.png">
+
   <title>IG Medical SMS Dashboard</title>
   <style>
     body { font-family: sans-serif; max-width: 400px; margin: 2em auto; }
     label, select, input, button { display: block; width: 100%; margin-bottom: 1em; }
     button { padding: .5em; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+    th, td { border: 1px solid #ccc; padding: 0.5em; text-align: left; }
+    th { background: #f4f4f4; }
   </style>
 </head>
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sms-dashboard/sw.js')
-        .then(() => console.log('Service Worker registered'))
-        .catch(e => console.error('SW registration failed:', e));
-    });
-  }
-</script>
 <body>
   <h2>IG Medical SMS Launcher</h2>
- 
+
   <label for="phone">Phone Number:</label>
   <input id="phone" type="tel" placeholder="+1XXXXXXXXXX" value="+1">
 
@@ -34,13 +32,34 @@
   <button id="send">Send SMS</button>
   <pre id="status"></pre>
 
+  <hr>
+
+  <h2>Incoming Replies</h2>
+  <table>
+    <thead>
+      <tr><th>From</th><th>Text</th><th>Received At</th></tr>
+    </thead>
+    <tbody id="replies-body">
+      <tr><td colspan="3" style="text-align:center;">Loading…</td></tr>
+    </tbody>
+  </table>
+
   <script>
-    // <-- EDIT ONLY THIS ARRAY -->
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sms-dashboard/sw.js')
+          .then(() => console.log('Service Worker registered'))
+          .catch(e => console.error('SW registration failed:', e));
+      });
+    }
+
+    // Message templates
     const messages = [
-      `Hello! Reminder: Your preoperative clearance appointment is scheduled for tomorrow at 3:15 PM. Reply "Done" once you’ve checked in.`,
-      `Good morning! Could you please reply with the facility name where your labwork and chest x-ray were completed? Don’t forget to check in now.`,
-      `This is IG Medical: Please complete your check-in via YourHealthFile before tomorrow’s appointment.`
-      `Hi there! This is IG Medical reminding you that your pre‑operative clearance appointment is tomorrow at 9:45 AM. To save time, please complete your check‑in now via YourHealthFile: https://www.yourhealthfile.com/portal/login.jsp Reply 'Done' after you have successfully checked in. If you have not registered, please reply with your email so that we can send you the registration link.`
+      `Hello! This is IG Medical. Just a friendly reminder: your pre‑operative clearance appointment is tomorrow at 3:15 PM. Please reply "Done" once you’ve completed your check‑in.`,
+      `Good morning! Could you reply with the names of the facilities where your lab work and chest x‑ray were done? And don’t forget to check in now to save time.`,
+      `This is IG Medical: to help us confirm your clearance, please complete your check‑in via YourHealthFile before tomorrow’s appointment.`,
+      `Hi there! IG Medical here—your pre‑operative clearance appointment is tomorrow at 9:45 AM. Please check in now: https://www.yourhealthfile.com/portal/login.jsp. Reply "Done" once you’re all set, or send your email if you need a registration link.`
     ];
 
     // Populate the dropdown
@@ -52,33 +71,50 @@
       select.appendChild(opt);
     });
 
-    // Send logic stays the same
+    // Send logic
     document.getElementById('send').addEventListener('click', () => {
-      const phone   = document.getElementById('phone').value.trim();
+      const phone = document.getElementById('phone').value.trim();
       const message = select.value;
-      const status  = document.getElementById('status');
+      const status = document.getElementById('status');
       status.textContent = 'Sending…';
 
       fetch('https://sms-proxy.joannab.workers.dev', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          phone,
-          message,
-          replyWebhookUrl: 'https://igmdlv.joannab.workers.dev/'
-        })
+        body: new URLSearchParams({ phone, message, replyWebhookUrl: 'https://igmdlv.joannab.workers.dev/' })
       })
       .then(res => res.json())
       .then(data => {
-        status.textContent = data.success 
-          ? '✅ Sent!' 
-          : '❌ Error: ' + (data.error || JSON.stringify(data));
+        status.textContent = data.success ? '✅ Sent!' : '❌ Error: ' + (data.error || JSON.stringify(data));
       })
       .catch(err => {
         status.textContent = '❌ Fetch failed: ' + err;
       });
     });
+
+    // Load incoming replies
+    async function loadReplies() {
+      try {
+        const res = await fetch('https://igmdlv.joannab.workers.dev/api');
+        const data = await res.json();
+        const tbody = document.getElementById('replies-body');
+        tbody.innerHTML = '';
+        data.forEach(item => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${item.from}</td>
+            <td>${item.text}</td>
+            <td>${new Date(item.receivedAt).toLocaleString()}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        document.getElementById('replies-body').innerHTML = `<tr><td colspan="3" style="color:red;">Failed to load replies</td></tr>`;
+        console.error(e);
+      }
+    }
+    loadReplies();
+    setInterval(loadReplies, 30000);
   </script>
 </body>
 </html>
-
