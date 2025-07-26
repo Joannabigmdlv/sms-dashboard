@@ -13,6 +13,15 @@
     button { padding: .5em; }
   </style>
 </head>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sms-dashboard/sw.js')
+        .then(() => console.log('Service Worker registered'))
+        .catch(e => console.error('SW registration failed:', e));
+    });
+  }
+</script>
 <body>
   <h2>IG Medical SMS Launcher</h2>
  
